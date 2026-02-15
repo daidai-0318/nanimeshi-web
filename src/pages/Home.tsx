@@ -8,7 +8,7 @@ const modes = [
 
 export default function Home({ onSelectMode, onOpenHistory, onOpenManualEntry, onOpenShoppingList }: { onSelectMode: (m: AppMode) => void; onOpenHistory: () => void; onOpenManualEntry: () => void; onOpenShoppingList: () => void }) {
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in pb-8">
       <div className="text-center mb-10 pt-4">
         <div className="text-5xl mb-3 animate-float">🍚</div>
         <h1 className="text-4xl font-bold gradient-text mb-1">なにめし</h1>

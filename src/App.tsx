@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useTheme } from './hooks/useTheme'
+import { useAuth } from './contexts/AuthContext'
 import { hasApiKey as checkApiKey } from './lib/storage'
+import { migrateLocalStorageToSupabase } from './lib/migrate'
 import Home from './pages/Home'
 import Consult from './pages/Consult'
 import RecipeView from './pages/RecipeView'
@@ -9,12 +11,14 @@ import Settings from './pages/Settings'
 import ManualEntry from './pages/ManualEntry'
 import ShoppingList from './pages/ShoppingList'
 import ApiKeySetup from './components/ApiKeySetup'
+import LoginScreen from './components/LoginScreen'
 import type { Recipe, AppMode, ConsultParams } from './types'
 
 type Page = 'home' | 'consult' | 'recipe' | 'history' | 'settings' | 'manual' | 'shopping'
 
 export default function App() {
   const { isDark, toggleTheme } = useTheme()
+  const { user, loading: authLoading } = useAuth()
   const [page, setPage] = useState<Page>('home')
   const [recipe, setRecipe] = useState<Recipe | null>(null)
   const [mode, setMode] = useState<AppMode>('consult')
@@ -22,10 +26,16 @@ export default function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [lastParams, setLastParams] = useState<ConsultParams | null>(null)
   const [retryFlag, setRetryFlag] = useState(0)
+  const [migrating, setMigrating] = useState(false)
 
   useEffect(() => {
-    setHasKey(checkApiKey())
-  }, [])
+    if (user) {
+      setHasKey(checkApiKey())
+      // Migrate localStorage data to Supabase on first login
+      setMigrating(true)
+      migrateLocalStorageToSupabase().finally(() => setMigrating(false))
+    }
+  }, [user])
 
   useEffect(() => {
     const on = () => setIsOnline(true)
@@ -55,7 +65,6 @@ export default function App() {
   }
 
   const handleRetry = () => {
-    // 前回のパラメータを保持したまま Consult に戻り、即座に再取得
     setRetryFlag((f) => f + 1)
     setPage('consult')
   }
@@ -64,6 +73,31 @@ export default function App() {
     setLastParams(params)
   }
 
+  // Auth loading
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-cream dark:bg-dark-bg flex items-center justify-center">
+        <div className="text-2xl animate-bounce-cook">🍙</div>
+      </div>
+    )
+  }
+
+  // Not logged in
+  if (!user) {
+    return <LoginScreen />
+  }
+
+  // Migrating data
+  if (migrating) {
+    return (
+      <div className="min-h-screen bg-cream dark:bg-dark-bg flex flex-col items-center justify-center gap-3">
+        <div className="text-2xl animate-bounce-cook">🍙</div>
+        <p className="text-sm text-gray-500">データを移行中...</p>
+      </div>
+    )
+  }
+
+  // No API key
   if (hasKey === null) {
     return (
       <div className="min-h-screen bg-cream dark:bg-dark-bg flex items-center justify-center">

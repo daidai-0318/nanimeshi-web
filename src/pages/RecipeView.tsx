@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { addMeal, addFavorite, getApiKey, updateMealPFC, addToShoppingList, addToPantry } from '../lib/storage'
+import { getApiKey } from '../lib/storage'
+import { addMeal, addFavorite, updateMealPFC, addToShoppingList, addToPantry } from '../lib/db'
 import { chatAboutRecipe, estimatePFC } from '../lib/claude'
 import type { Recipe, AppMode } from '../types'
 
@@ -134,11 +135,13 @@ export default function RecipeView({ recipe, onBack, onRetry }: Props) {
 
   const handleSave = async () => {
     const ingredientsStr = JSON.stringify(recipe.ingredients)
-    const { id } = addMeal({ recipe_name: recipe.name, category: recipe.category, ingredients: ingredientsStr })
+    const { id } = await addMeal({ recipe_name: recipe.name, category: recipe.category, ingredients: ingredientsStr })
     setSaved(true)
 
     // パントリーに食材を追加
-    recipe.ingredients.forEach((ing) => addToPantry(ing.name))
+    for (const ing of recipe.ingredients) {
+      await addToPantry(ing.name).catch(() => {})
+    }
 
     // バックグラウンドでPFC推定
     try {
@@ -148,19 +151,19 @@ export default function RecipeView({ recipe, onBack, onRetry }: Props) {
         ingredients: recipe.ingredients.map((i) => `${i.name}(${i.amount})`).join('、'),
         servings: recipe.servings,
       })
-      updateMealPFC(id, pfc)
+      await updateMealPFC(id, pfc)
     } catch {
       // PFC推定失敗しても食事は記録済み
     }
   }
 
-  const handleFav = () => {
-    addFavorite({ recipe_name: recipe.name, recipe_data: JSON.stringify(recipe) })
+  const handleFav = async () => {
+    await addFavorite({ recipe_name: recipe.name, recipe_data: JSON.stringify(recipe) })
     setFavorited(true)
   }
 
-  const handleAddToShoppingList = () => {
-    addToShoppingList(recipe.ingredients, recipe.name)
+  const handleAddToShoppingList = async () => {
+    await addToShoppingList(recipe.ingredients, recipe.name)
     setAddedToList(true)
   }
 

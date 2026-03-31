@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getShoppingList, toggleShoppingItem, removeShoppingItem, clearShoppingList, addToShoppingList, getFavorites } from '../lib/storage'
+import { getShoppingList, toggleShoppingItem, removeShoppingItem, clearShoppingList, addToShoppingList, getFavorites } from '../lib/db'
 import type { ShoppingItem, Recipe } from '../types'
 
 interface Props {
@@ -9,43 +9,50 @@ interface Props {
 export default function ShoppingList({ onBack }: Props) {
   const [items, setItems] = useState<ShoppingItem[]>([])
   const [showFavorites, setShowFavorites] = useState(false)
+  const [favList, setFavList] = useState<{ id: number; recipe_name: string; recipe_data: string }[]>([])
 
-  const reload = () => setItems(getShoppingList())
+  const reload = async () => {
+    const list = await getShoppingList()
+    setItems(list)
+  }
   useEffect(() => { reload() }, [])
 
   const unchecked = useMemo(() => items.filter((i) => !i.checked), [items])
   const checked = useMemo(() => items.filter((i) => i.checked), [items])
 
-  const handleToggle = (id: number) => {
-    toggleShoppingItem(id)
-    reload()
+  const handleToggle = async (id: number) => {
+    await toggleShoppingItem(id)
+    await reload()
   }
 
-  const handleRemove = (id: number) => {
-    removeShoppingItem(id)
-    reload()
+  const handleRemove = async (id: number) => {
+    await removeShoppingItem(id)
+    await reload()
   }
 
-  const handleClear = () => {
-    clearShoppingList()
-    reload()
+  const handleClear = async () => {
+    await clearShoppingList()
+    await reload()
   }
 
-  const handleAddFromFavorite = (recipeName: string, recipeData: string) => {
+  const handleAddFromFavorite = async (recipeName: string, recipeData: string) => {
     try {
       const recipe: Recipe = JSON.parse(recipeData)
-      addToShoppingList(recipe.ingredients, recipeName)
-      reload()
+      await addToShoppingList(recipe.ingredients, recipeName)
+      await reload()
       setShowFavorites(false)
     } catch {
       // parse error
     }
   }
 
-  const favorites = useMemo(() => {
-    if (!showFavorites) return []
-    return getFavorites()
-  }, [showFavorites])
+  const handleShowFavorites = async () => {
+    if (!showFavorites) {
+      const favs = await getFavorites()
+      setFavList(favs)
+    }
+    setShowFavorites(!showFavorites)
+  }
 
   return (
     <div className="animate-fade-in space-y-5 pb-8">
@@ -113,7 +120,7 @@ export default function ShoppingList({ onBack }: Props) {
 
       {/* アクションボタン */}
       <div className="space-y-3">
-        <button onClick={() => setShowFavorites(!showFavorites)}
+        <button onClick={handleShowFavorites}
           className="w-full bg-white dark:bg-dark-card border border-gray-200 dark:border-gray-700 py-3 rounded-xl font-medium text-sm active:scale-[0.97] shadow-sm">
           {showFavorites ? '✕ 閉じる' : '⭐ お気に入りから追加'}
         </button>
@@ -129,10 +136,10 @@ export default function ShoppingList({ onBack }: Props) {
       {showFavorites && (
         <div className="animate-slide-in space-y-2">
           <h3 className="font-bold text-sm px-1">お気に入りレシピ</h3>
-          {favorites.length === 0 ? (
+          {favList.length === 0 ? (
             <p className="text-gray-500 text-sm px-1">お気に入りがまだありません</p>
           ) : (
-            favorites.map((fav) => (
+            favList.map((fav) => (
               <button key={fav.id} onClick={() => handleAddFromFavorite(fav.recipe_name, fav.recipe_data)}
                 className="w-full text-left bg-white dark:bg-dark-card rounded-xl p-3.5 shadow-sm border border-gray-100 dark:border-gray-700 active:scale-[0.97] transition-all">
                 <div className="flex items-center justify-between">

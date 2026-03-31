@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getApiKey, setApiKey as storeApiKey, removeApiKey, getFavorites, removeFavorite, getPantry, removeFromPantry, getPFCGoals, savePFCGoals, removePFCGoals } from '../lib/storage'
+import { getApiKey, setApiKey as storeApiKey, removeApiKey } from '../lib/storage'
+import { getFavorites, removeFavorite, getPantry, removeFromPantry, getPFCGoals, savePFCGoals, removePFCGoals } from '../lib/db'
+import { useAuth } from '../contexts/AuthContext'
 import type { Favorite, Recipe, Category, PFCGoals } from '../types'
 
 const defaultGoals: PFCGoals = { calories: 2000, protein: 60, fat: 55, carbs: 300 }
 
 export default function Settings({ onApiKeyRemoved }: { onApiKeyRemoved: () => void }) {
+  const { user, signOut } = useAuth()
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [newKey, setNewKey] = useState('')
@@ -20,11 +23,14 @@ export default function Settings({ onApiKeyRemoved }: { onApiKeyRemoved: () => v
 
   useEffect(() => {
     setApiKey(getApiKey())
-    setFavorites(getFavorites())
-    setPantry(getPantry())
-    const saved = getPFCGoals()
-    setGoals(saved)
-    if (saved) setGoalDraft(saved)
+    Promise.all([getFavorites(), getPantry(), getPFCGoals()])
+      .then(([favs, pantryItems, saved]) => {
+        setFavorites(favs)
+        setPantry(pantryItems)
+        setGoals(saved)
+        if (saved) setGoalDraft(saved)
+      })
+      .catch(() => {})
   }, [])
 
   const handleUpdate = () => {
@@ -34,18 +40,18 @@ export default function Settings({ onApiKeyRemoved }: { onApiKeyRemoved: () => v
 
   const handleRemoveKey = () => { removeApiKey(); onApiKeyRemoved() }
 
-  const handleRemoveFav = (id: number) => { removeFavorite(id); setFavorites((p) => p.filter((f) => f.id !== id)) }
+  const handleRemoveFav = async (id: number) => { await removeFavorite(id); setFavorites((p) => p.filter((f) => f.id !== id)) }
 
-  const handleRemovePantryItem = (item: string) => { removeFromPantry(item); setPantry((p) => p.filter((i) => i !== item)) }
+  const handleRemovePantryItem = async (item: string) => { await removeFromPantry(item); setPantry((p) => p.filter((i) => i !== item)) }
 
-  const handleSaveGoals = () => {
-    savePFCGoals(goalDraft)
+  const handleSaveGoals = async () => {
+    await savePFCGoals(goalDraft)
     setGoals(goalDraft)
     setEditingGoals(false)
   }
 
-  const handleRemoveGoals = () => {
-    removePFCGoals()
+  const handleRemoveGoals = async () => {
+    await removePFCGoals()
     setGoals(null)
     setEditingGoals(false)
     setGoalDraft(defaultGoals)
@@ -253,6 +259,15 @@ export default function Settings({ onApiKeyRemoved }: { onApiKeyRemoved: () => v
             </div>
           </div>
         )}
+      </div>
+
+      {/* アカウント */}
+      <div className="bg-white dark:bg-dark-card rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+        <h3 className="font-bold mb-3">👤 アカウント</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{user?.email ?? 'ログイン中'}</p>
+        <button onClick={signOut} className="w-full text-sm bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 py-2.5 rounded-lg font-medium active:scale-[0.97] transition-all">
+          ログアウト
+        </button>
       </div>
 
       <div className="text-center text-gray-400 text-xs space-y-1 pb-4">

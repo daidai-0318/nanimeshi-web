@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getMeals, getPFCGoals } from '../lib/storage'
+import { getMeals, getPFCGoals } from '../lib/db'
 import type { Meal, PFCGoals } from '../types'
 
 function GoalProgress({ label, current, goal, color }: { label: string; current: number; goal: number; color: string }) {
@@ -25,10 +25,13 @@ export default function History({ onOpenManualEntry }: { onOpenManualEntry: () =
     const now = new Date(); return { year: now.getFullYear(), month: now.getMonth() }
   })
   const [goals, setGoals] = useState<PFCGoals | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setMeals(getMeals(200))
-    setGoals(getPFCGoals())
+    Promise.all([getMeals(200), getPFCGoals()])
+      .then(([m, g]) => { setMeals(m); setGoals(g) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
   const mealsByDate = useMemo(() => {
@@ -134,6 +137,14 @@ export default function History({ onOpenManualEntry }: { onOpenManualEntry: () =
 
   const barColors: Record<string, string> = { '肉料理': 'from-red-400 to-rose-400', '魚料理': 'from-blue-400 to-cyan-400', '野菜料理': 'from-green-400 to-emerald-400' }
   const barEmojis: Record<string, string> = { '肉料理': '🥩', '魚料理': '🐟', '野菜料理': '🥬' }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-2xl animate-bounce-cook">🍙</div>
+      </div>
+    )
+  }
 
   return (
     <div className="animate-fade-in space-y-5 pb-16">

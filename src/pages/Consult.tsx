@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { getApiKey, getMeals, getPantry } from '../lib/storage'
+import { getApiKey } from '../lib/storage'
+import { getMeals, getPantry } from '../lib/db'
 import { requestRecipe } from '../lib/claude'
 import type { AppMode, Mood, CookingTime, Recipe, ConsultParams } from '../types'
 
@@ -35,12 +36,14 @@ export default function Consult({ mode, retryParams, onRecipeReady, onSaveParams
   const [error, setError] = useState('')
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [showPantry, setShowPantry] = useState(false)
+  const [pantryItems, setPantryItems] = useState<string[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  const pantry = getPantry()
+  useEffect(() => {
+    getPantry().then(setPantryItems).catch(() => {})
+  }, [])
 
   useEffect(() => {
-    // ユーザーが操作してメッセージが増えた時だけスクロール（初回の1件目ではスクロールしない）
     if (messages.length > 1) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
@@ -48,7 +51,6 @@ export default function Consult({ mode, retryParams, onRecipeReady, onSaveParams
 
   useEffect(() => {
     if (isRetry) {
-      // 同じ条件で別のレシピを再取得
       const p = retryParams!
       const summary = [
         p.ingredients.length > 0 ? `食材: ${p.ingredients.join('、')}` : '',
@@ -108,20 +110,19 @@ export default function Consult({ mode, retryParams, onRecipeReady, onSaveParams
   const confirmServings = () => {
     setMessages((p) => [...p, { role: 'user', text: `${servings}人分` }, { role: 'bot', text: '🍳 レシピを考え中...' }])
     setStep(4)
-    // パラメータを保存して、「別のレシピ」で再利用できるように
     onSaveParams({ ingredients, mood: mood ?? undefined, cookingTime: cookingTime ?? undefined, servings })
     fetchRecipe({ mode: 'consult', ingredients, mood: mood ?? undefined, cookingTime: cookingTime ?? undefined, servings })
   }
 
   const fetchRecipe = async (params: { mode: AppMode; ingredients?: string[]; mood?: string; cookingTime?: string; servings?: number }) => {
     setLoading(true); setError('')
-    // おまかせ・手抜きモードでもパラメータを保存
     if (params.mode !== 'consult') {
       onSaveParams({ ingredients: params.ingredients ?? [], mood: undefined, cookingTime: undefined, servings: params.servings ?? 1 })
     }
     try {
-      const recent = getMeals(7).map((m) => m.recipe_name)
-      const recipe = await requestRecipe(getApiKey(), { ...params, recentMeals: recent.length > 0 ? recent : undefined })
+      const recent = await getMeals(7)
+      const recentNames = recent.map((m) => m.recipe_name)
+      const recipe = await requestRecipe(getApiKey(), { ...params, recentMeals: recentNames.length > 0 ? recentNames : undefined })
       onRecipeReady(recipe)
     } catch (err: any) {
       const msg = err?.message || 'エラーが発生しました'
@@ -131,7 +132,7 @@ export default function Consult({ mode, retryParams, onRecipeReady, onSaveParams
     }
   }
 
-  const unusedPantry = pantry.filter((item) => !ingredients.includes(item))
+  const unusedPantry = pantryItems.filter((item) => !ingredients.includes(item))
 
   return (
     <div className="animate-fade-in flex flex-col" style={{ minHeight: 'calc(100vh - 100px)' }}>
@@ -170,8 +171,7 @@ export default function Consult({ mode, retryParams, onRecipeReady, onSaveParams
               </div>
             )}
 
-            {/* パントリー（よく使う食材） */}
-            {pantry.length > 0 && (
+            {pantryItems.length > 0 && (
               <div>
                 <button onClick={() => setShowPantry(!showPantry)}
                   className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1.5 flex items-center gap-1">

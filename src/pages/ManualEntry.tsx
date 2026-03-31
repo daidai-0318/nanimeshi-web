@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { addMeal, getApiKey } from '../lib/storage'
+import { getApiKey } from '../lib/storage'
+import { addMeal } from '../lib/db'
 import { estimatePFC } from '../lib/claude'
 import type { Category, PFC } from '../types'
 
@@ -63,7 +64,7 @@ export default function ManualEntry({ onBack, onSaved }: Props) {
         }
       }
 
-      addMeal({
+      await addMeal({
         recipe_name: recipeName.trim(),
         category,
         ingredients: JSON.stringify(ingredients.map((name) => ({ name, amount: '' }))),

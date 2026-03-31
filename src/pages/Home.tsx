@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { getMeals } from '../lib/storage'
+import { useState, useEffect } from 'react'
+import { getMeals } from '../lib/db'
 import type { AppMode } from '../types'
 
 const modes = [
@@ -26,7 +26,11 @@ function getSeasonEmoji(): string {
 }
 
 export default function Home({ onSelectMode, onOpenHistory, onOpenManualEntry, onOpenShoppingList }: { onSelectMode: (m: AppMode) => void; onOpenHistory: () => void; onOpenManualEntry: () => void; onOpenShoppingList: () => void }) {
-  const totalMeals = useMemo(() => getMeals(999).length, [])
+  const [totalMeals, setTotalMeals] = useState(0)
+
+  useEffect(() => {
+    getMeals(999).then((meals) => setTotalMeals(meals.length)).catch(() => {})
+  }, [])
 
   return (
     <div className="animate-fade-in pb-8">

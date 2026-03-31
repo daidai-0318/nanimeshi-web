@@ -1,6 +1,22 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getMeals } from '../lib/storage'
-import type { Meal } from '../types'
+import { getMeals, getPFCGoals } from '../lib/storage'
+import type { Meal, PFCGoals } from '../types'
+
+function GoalProgress({ label, current, goal, color }: { label: string; current: number; goal: number; color: string }) {
+  const pct = Math.min(100, Math.round((current / goal) * 100))
+  const over = current > goal
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-gray-500">{label}</span>
+        <span className={`font-medium ${over ? 'text-red-500' : pct >= 80 ? 'text-green-600' : ''}`}>{current} / {goal}</span>
+      </div>
+      <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-700 ${over ? 'bg-red-400' : color}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
 
 export default function History({ onOpenManualEntry }: { onOpenManualEntry: () => void }) {
   const [meals, setMeals] = useState<Meal[]>([])
@@ -8,14 +24,32 @@ export default function History({ onOpenManualEntry }: { onOpenManualEntry: () =
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date(); return { year: now.getFullYear(), month: now.getMonth() }
   })
+  const [goals, setGoals] = useState<PFCGoals | null>(null)
 
-  useEffect(() => { setMeals(getMeals(200)) }, [])
+  useEffect(() => {
+    setMeals(getMeals(200))
+    setGoals(getPFCGoals())
+  }, [])
 
   const mealsByDate = useMemo(() => {
     const map: Record<string, Meal[]> = {}
     meals.forEach((m) => { const d = m.cooked_at.split('T')[0]; if (!map[d]) map[d] = []; map[d].push(m) })
     return map
   }, [meals])
+
+  // 連続記録日数
+  const streak = useMemo(() => {
+    let count = 0
+    const today = new Date()
+    for (let i = 0; i < 365; i++) {
+      const d = new Date(today)
+      d.setDate(d.getDate() - i)
+      const key = d.toISOString().split('T')[0]
+      if (mealsByDate[key]) count++
+      else break
+    }
+    return count
+  }, [mealsByDate])
 
   const weekStats = useMemo(() => {
     const ago = new Date(); ago.setDate(ago.getDate() - 7)
@@ -105,6 +139,11 @@ export default function History({ onOpenManualEntry }: { onOpenManualEntry: () =
     <div className="animate-fade-in space-y-5 pb-16">
       <div className="text-center pt-2">
         <h2 className="text-2xl font-bold gradient-text">食事履歴</h2>
+        {streak > 0 && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            🔥 {streak}日連続記録中！
+          </p>
+        )}
       </div>
 
       {/* カテゴリバランス */}
@@ -178,8 +217,19 @@ export default function History({ onOpenManualEntry }: { onOpenManualEntry: () =
             <span className="text-sm text-gray-500 ml-1">kcal/日</span>
           </div>
 
+          {/* 目標との比較 */}
+          {goals && (
+            <div className="space-y-2 pt-3 border-t border-gray-100 dark:border-gray-700">
+              <h4 className="text-xs font-bold text-gray-500 mb-2">🎯 目標との比較（1日平均）</h4>
+              <GoalProgress label="カロリー" current={weeklyPFC.avgCalories} goal={goals.calories} color="bg-gradient-to-r from-orange-400 to-amber-400" />
+              <GoalProgress label="タンパク質" current={weeklyPFC.avgProtein} goal={goals.protein} color="bg-blue-400" />
+              <GoalProgress label="脂質" current={weeklyPFC.avgFat} goal={goals.fat} color="bg-yellow-400" />
+              <GoalProgress label="炭水化物" current={weeklyPFC.avgCarbs} goal={goals.carbs} color="bg-green-400" />
+            </div>
+          )}
+
           {pfcComment && (
-            <p className="text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3">{pfcComment}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 mt-3">{pfcComment}</p>
           )}
         </div>
       )}

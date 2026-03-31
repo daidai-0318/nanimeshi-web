@@ -49,6 +49,20 @@ export interface ShoppingItem {
   recipe_name?: string
 }
 
+export interface PFCGoals {
+  calories: number
+  protein: number
+  fat: number
+  carbs: number
+}
+
+export interface ConsultParams {
+  ingredients: string[]
+  mood?: Mood
+  cookingTime?: CookingTime
+  servings: number
+}
+
 export type AppMode = 'consult' | 'random' | 'lazy'
 export type Mood = 'がっつり' | 'あっさり' | '辛いもの' | '甘いもの' | 'ヘルシー'
 export type CookingTime = '5分以内' | '15分' | '30分' | '時間気にしない'

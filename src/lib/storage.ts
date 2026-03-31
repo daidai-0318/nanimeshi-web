@@ -1,4 +1,4 @@
-import type { Meal, Favorite, PFC, ShoppingItem, Ingredient } from '../types'
+import type { Meal, Favorite, PFC, PFCGoals, ShoppingItem, Ingredient } from '../types'
 
 // --- API Key ---
 export function getApiKey(): string {
@@ -152,4 +152,40 @@ export function removeShoppingItem(id: number): void {
 
 export function clearShoppingList(): void {
   localStorage.removeItem('nanimeshi-shopping')
+}
+
+// --- Pantry (よく使う食材) ---
+export function getPantry(): string[] {
+  const raw = localStorage.getItem('nanimeshi-pantry')
+  return raw ? JSON.parse(raw) : []
+}
+
+export function savePantry(items: string[]): void {
+  localStorage.setItem('nanimeshi-pantry', JSON.stringify(items))
+}
+
+export function addToPantry(item: string): void {
+  const pantry = getPantry()
+  if (!pantry.includes(item)) {
+    pantry.push(item)
+    savePantry(pantry)
+  }
+}
+
+export function removeFromPantry(item: string): void {
+  savePantry(getPantry().filter((i) => i !== item))
+}
+
+// --- PFC Goals ---
+export function getPFCGoals(): PFCGoals | null {
+  const raw = localStorage.getItem('nanimeshi-pfc-goals')
+  return raw ? JSON.parse(raw) : null
+}
+
+export function savePFCGoals(goals: PFCGoals): void {
+  localStorage.setItem('nanimeshi-pfc-goals', JSON.stringify(goals))
+}
+
+export function removePFCGoals(): void {
+  localStorage.removeItem('nanimeshi-pfc-goals')
 }

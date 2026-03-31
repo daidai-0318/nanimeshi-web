@@ -1,3 +1,5 @@
+import { useMemo } from 'react'
+import { getMeals } from '../lib/storage'
 import type { AppMode } from '../types'
 
 const modes = [
@@ -6,13 +8,35 @@ const modes = [
   { id: 'lazy' as AppMode, emoji: '😴', title: '手抜きモード', description: '包丁なし・5分以内！超簡単レシピだけ。', color: 'from-teal-400 to-emerald-400', shadow: 'shadow-teal-200/50 dark:shadow-teal-900/30' },
 ]
 
+function getGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour >= 5 && hour < 10) return 'おはよう！朝ごはん何にする？'
+  if (hour >= 10 && hour < 15) return 'お昼どうする？'
+  if (hour >= 15 && hour < 17) return 'おやつタイム？'
+  if (hour >= 17 && hour < 21) return '今日の晩ごはん何にする？'
+  return '夜食でも作る？'
+}
+
+function getSeasonEmoji(): string {
+  const month = new Date().getMonth() + 1
+  if (month >= 3 && month <= 5) return '🌸'
+  if (month >= 6 && month <= 8) return '🌻'
+  if (month >= 9 && month <= 11) return '🍁'
+  return '⛄'
+}
+
 export default function Home({ onSelectMode, onOpenHistory, onOpenManualEntry, onOpenShoppingList }: { onSelectMode: (m: AppMode) => void; onOpenHistory: () => void; onOpenManualEntry: () => void; onOpenShoppingList: () => void }) {
+  const totalMeals = useMemo(() => getMeals(999).length, [])
+
   return (
     <div className="animate-fade-in pb-8">
       <div className="text-center mb-10 pt-4">
-        <div className="text-5xl mb-3 animate-float">🍚</div>
+        <div className="text-5xl mb-3 animate-float">{getSeasonEmoji()}</div>
         <h1 className="text-4xl font-bold gradient-text mb-1">なにめし</h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">今日は何食べる？</p>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">{getGreeting()}</p>
+        {totalMeals > 0 && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">これまで {totalMeals} 食を記録</p>
+        )}
       </div>
       <div className="space-y-4 mb-8">
         {modes.map((m, i) => (

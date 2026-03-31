@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
-import { getApiKey, getMeals } from '../lib/storage'
+import { getApiKey, getMeals, getPantry } from '../lib/storage'
 import { requestRecipe } from '../lib/claude'
-import type { AppMode, Mood, CookingTime, Recipe } from '../types'
+import type { AppMode, Mood, CookingTime, Recipe, ConsultParams } from '../types'
 
 interface Props {
   mode: AppMode
+  retryParams?: ConsultParams | null
   onRecipeReady: (recipe: Recipe) => void
+  onSaveParams: (params: ConsultParams) => void
   onBack: () => void
 }
 
@@ -21,17 +23,21 @@ const cookingTimes: { label: CookingTime; emoji: string }[] = [
 
 interface ChatMsg { role: 'bot' | 'user'; text: string }
 
-export default function Consult({ mode, onRecipeReady, onBack }: Props) {
-  const [step, setStep] = useState(mode === 'consult' ? 0 : -1)
-  const [ingredients, setIngredients] = useState<string[]>([])
+export default function Consult({ mode, retryParams, onRecipeReady, onSaveParams, onBack }: Props) {
+  const isRetry = !!retryParams
+  const [step, setStep] = useState(isRetry ? 4 : mode === 'consult' ? 0 : -1)
+  const [ingredients, setIngredients] = useState<string[]>(retryParams?.ingredients ?? [])
   const [ingredientInput, setIngredientInput] = useState('')
-  const [mood, setMood] = useState<Mood | null>(null)
-  const [cookingTime, setCookingTime] = useState<CookingTime | null>(null)
-  const [servings, setServings] = useState(1)
+  const [mood, setMood] = useState<Mood | null>(retryParams?.mood ?? null)
+  const [cookingTime, setCookingTime] = useState<CookingTime | null>(retryParams?.cookingTime ?? null)
+  const [servings, setServings] = useState(retryParams?.servings ?? 1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [messages, setMessages] = useState<ChatMsg[]>([])
+  const [showPantry, setShowPantry] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  const pantry = getPantry()
 
   useEffect(() => {
     // ユーザーが操作してメッセージが増えた時だけスクロール（初回の1件目ではスクロールしない）
@@ -41,7 +47,27 @@ export default function Consult({ mode, onRecipeReady, onBack }: Props) {
   }, [messages, step, loading])
 
   useEffect(() => {
-    if (mode === 'consult') {
+    if (isRetry) {
+      // 同じ条件で別のレシピを再取得
+      const p = retryParams!
+      const summary = [
+        p.ingredients.length > 0 ? `食材: ${p.ingredients.join('、')}` : '',
+        p.mood ? `気分: ${p.mood}` : '',
+        p.cookingTime ? `時間: ${p.cookingTime}` : '',
+        `${p.servings}人分`,
+      ].filter(Boolean).join(' / ')
+      setMessages([
+        { role: 'bot', text: `🔄 同じ条件で別のレシピを探すよ！\n${summary}` },
+        { role: 'bot', text: '🍳 レシピを考え中...' },
+      ])
+      fetchRecipe({
+        mode,
+        ingredients: p.ingredients.length > 0 ? p.ingredients : undefined,
+        mood: p.mood,
+        cookingTime: p.cookingTime,
+        servings: p.servings,
+      })
+    } else if (mode === 'consult') {
       setMessages([{ role: 'bot', text: '🍳 こんにちは！なにめしシェフです。\n冷蔵庫に何がありますか？' }])
     } else if (mode === 'random') {
       setMessages([{ role: 'bot', text: '🎲 おまかせモード！\nランダムにレシピを提案するよ。ちょっと待ってね...' }])
@@ -55,6 +81,10 @@ export default function Consult({ mode, onRecipeReady, onBack }: Props) {
   const addIngredient = () => {
     const t = ingredientInput.trim()
     if (t && !ingredients.includes(t)) { setIngredients([...ingredients, t]); setIngredientInput('') }
+  }
+
+  const addFromPantry = (item: string) => {
+    if (!ingredients.includes(item)) setIngredients([...ingredients, item])
   }
 
   const confirmIngredients = () => {
@@ -78,11 +108,17 @@ export default function Consult({ mode, onRecipeReady, onBack }: Props) {
   const confirmServings = () => {
     setMessages((p) => [...p, { role: 'user', text: `${servings}人分` }, { role: 'bot', text: '🍳 レシピを考え中...' }])
     setStep(4)
+    // パラメータを保存して、「別のレシピ」で再利用できるように
+    onSaveParams({ ingredients, mood: mood ?? undefined, cookingTime: cookingTime ?? undefined, servings })
     fetchRecipe({ mode: 'consult', ingredients, mood: mood ?? undefined, cookingTime: cookingTime ?? undefined, servings })
   }
 
   const fetchRecipe = async (params: { mode: AppMode; ingredients?: string[]; mood?: string; cookingTime?: string; servings?: number }) => {
     setLoading(true); setError('')
+    // おまかせ・手抜きモードでもパラメータを保存
+    if (params.mode !== 'consult') {
+      onSaveParams({ ingredients: params.ingredients ?? [], mood: undefined, cookingTime: undefined, servings: params.servings ?? 1 })
+    }
     try {
       const recent = getMeals(7).map((m) => m.recipe_name)
       const recipe = await requestRecipe(getApiKey(), { ...params, recentMeals: recent.length > 0 ? recent : undefined })
@@ -94,6 +130,8 @@ export default function Consult({ mode, onRecipeReady, onBack }: Props) {
       setLoading(false)
     }
   }
+
+  const unusedPantry = pantry.filter((item) => !ingredients.includes(item))
 
   return (
     <div className="animate-fade-in flex flex-col" style={{ minHeight: 'calc(100vh - 100px)' }}>
@@ -131,6 +169,30 @@ export default function Consult({ mode, onRecipeReady, onBack }: Props) {
                 ))}
               </div>
             )}
+
+            {/* パントリー（よく使う食材） */}
+            {pantry.length > 0 && (
+              <div>
+                <button onClick={() => setShowPantry(!showPantry)}
+                  className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1.5 flex items-center gap-1">
+                  🧊 よく使う食材 {showPantry ? '▲' : '▼'}
+                </button>
+                {showPantry && unusedPantry.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 animate-fade-in">
+                    {unusedPantry.slice(0, 15).map((item) => (
+                      <button key={item} onClick={() => addFromPantry(item)}
+                        className="px-2.5 py-1 rounded-full text-xs bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-200/50 dark:border-teal-800/50 active:scale-95 transition-all">
+                        + {item}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showPantry && unusedPantry.length === 0 && (
+                  <p className="text-xs text-gray-400">全て追加済み</p>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <input type="text" value={ingredientInput} onChange={(e) => setIngredientInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addIngredient() } }}

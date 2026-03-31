@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
-import { addMeal, addFavorite, getApiKey, updateMealPFC, addToShoppingList } from '../lib/storage'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { addMeal, addFavorite, getApiKey, updateMealPFC, addToShoppingList, addToPantry } from '../lib/storage'
 import { chatAboutRecipe, estimatePFC } from '../lib/claude'
 import type { Recipe, AppMode } from '../types'
 
@@ -12,17 +12,116 @@ interface Props {
 
 interface ChatMsg { role: 'bot' | 'user'; text: string }
 
+function CookingTimer({ defaultMinutes }: { defaultMinutes: number }) {
+  const [totalSeconds, setTotalSeconds] = useState(defaultMinutes * 60)
+  const [remaining, setRemaining] = useState(defaultMinutes * 60)
+  const [running, setRunning] = useState(false)
+  const [finished, setFinished] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    if (running && remaining > 0) {
+      intervalRef.current = setInterval(() => {
+        setRemaining((prev) => {
+          if (prev <= 1) {
+            setRunning(false)
+            setFinished(true)
+            if (intervalRef.current) clearInterval(intervalRef.current)
+            // vibrate if available
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200])
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    }
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+  }, [running, remaining])
+
+  const toggle = () => {
+    if (finished) {
+      setRemaining(totalSeconds)
+      setFinished(false)
+      return
+    }
+    setRunning(!running)
+  }
+
+  const reset = () => {
+    setRunning(false)
+    setFinished(false)
+    setRemaining(totalSeconds)
+  }
+
+  const adjust = (delta: number) => {
+    if (running) return
+    const newTotal = Math.max(60, totalSeconds + delta)
+    setTotalSeconds(newTotal)
+    setRemaining(newTotal)
+    setFinished(false)
+  }
+
+  const mins = Math.floor(remaining / 60)
+  const secs = remaining % 60
+  const progress = totalSeconds > 0 ? ((totalSeconds - remaining) / totalSeconds) * 100 : 0
+
+  return (
+    <div className={`bg-white dark:bg-dark-card rounded-2xl p-5 shadow-sm border transition-all ${finished ? 'border-red-300 dark:border-red-700 animate-pulse' : 'border-gray-100 dark:border-gray-700'}`}>
+      <h3 className="font-bold text-lg mb-4">
+        {finished ? '🔔 タイマー終了！' : '⏲️ クッキングタイマー'}
+      </h3>
+
+      <div className="relative flex items-center justify-center mb-4">
+        {!running && !finished && (
+          <button onClick={() => adjust(-60)} className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm font-bold active:scale-90 transition-all">-1</button>
+        )}
+        <div className="mx-6 text-center">
+          <div className={`text-5xl font-bold font-mono tracking-wider ${finished ? 'text-red-500 animate-bounce' : running ? 'gradient-text' : ''}`}>
+            {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+          </div>
+          {running && (
+            <div className="mt-2 h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-orange-400 to-amber-400 rounded-full transition-all duration-1000" style={{ width: `${progress}%` }} />
+            </div>
+          )}
+        </div>
+        {!running && !finished && (
+          <button onClick={() => adjust(60)} className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm font-bold active:scale-90 transition-all">+1</button>
+        )}
+      </div>
+
+      <div className="flex gap-3 justify-center">
+        <button onClick={toggle}
+          className={`flex-1 max-w-40 py-3 rounded-xl font-bold text-sm active:scale-[0.97] transition-all ${
+            finished ? 'btn-gradient text-white' :
+            running ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' :
+            'btn-gradient text-white'
+          }`}>
+          {finished ? '🔄 リセット' : running ? '⏸️ 一時停止' : '▶️ スタート'}
+        </button>
+        {(running || (remaining < totalSeconds && !finished)) && (
+          <button onClick={reset} className="px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm font-medium active:scale-[0.97] transition-all">
+            リセット
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function RecipeView({ recipe, onBack, onRetry }: Props) {
   const [checked, setChecked] = useState<Set<number>>(new Set())
   const [saved, setSaved] = useState(false)
   const [favorited, setFavorited] = useState(false)
   const [addedToList, setAddedToList] = useState(false)
+  const [shareMsg, setShareMsg] = useState('')
   const [chatOpen, setChatOpen] = useState(false)
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([])
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [chatError, setChatError] = useState('')
+  const [showTimer, setShowTimer] = useState(false)
   const chatBottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -37,6 +136,9 @@ export default function RecipeView({ recipe, onBack, onRetry }: Props) {
     const ingredientsStr = JSON.stringify(recipe.ingredients)
     const { id } = addMeal({ recipe_name: recipe.name, category: recipe.category, ingredients: ingredientsStr })
     setSaved(true)
+
+    // パントリーに食材を追加
+    recipe.ingredients.forEach((ing) => addToPantry(ing.name))
 
     // バックグラウンドでPFC推定
     try {
@@ -61,6 +163,23 @@ export default function RecipeView({ recipe, onBack, onRetry }: Props) {
     addToShoppingList(recipe.ingredients, recipe.name)
     setAddedToList(true)
   }
+
+  const handleShare = useCallback(async () => {
+    const text = `🍽️ ${recipe.name}\n\n${recipe.description}\n\n⏱️ ${recipe.cookingTime}分 | ${recipe.difficulty} | ${recipe.servings}人分\n\n🥕 材料:\n${recipe.ingredients.map((i) => `・${i.name} ${i.amount}`).join('\n')}\n\n📝 手順:\n${recipe.steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\n${recipe.tips ? `💡 ${recipe.tips}\n\n` : ''}#なにめし`
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: recipe.name, text })
+        setShareMsg('共有しました！')
+      } catch {
+        // user cancelled
+      }
+    } else {
+      await navigator.clipboard.writeText(text)
+      setShareMsg('コピーしました！')
+    }
+    setTimeout(() => setShareMsg(''), 2000)
+  }, [recipe])
 
   const openChat = () => {
     setChatOpen(true)
@@ -98,6 +217,7 @@ export default function RecipeView({ recipe, onBack, onRetry }: Props) {
   }
 
   const allChecked = recipe.ingredients.length > 0 && checked.size === recipe.ingredients.length
+  const timerMinutes = parseInt(recipe.cookingTime) || 15
 
   return (
     <div className="animate-fade-in space-y-5 pb-8">
@@ -152,6 +272,16 @@ export default function RecipeView({ recipe, onBack, onRetry }: Props) {
         </div>
       )}
 
+      {/* クッキングタイマー */}
+      {!showTimer ? (
+        <button onClick={() => setShowTimer(true)}
+          className="w-full bg-white dark:bg-dark-card border-2 border-dashed border-teal-300/50 dark:border-teal-700/50 rounded-2xl p-4 text-center font-medium text-teal-600 dark:text-teal-400 hover:border-teal-400/80 hover:shadow-sm transition-all active:scale-[0.97]">
+          ⏲️ タイマーを使う（{timerMinutes}分）
+        </button>
+      ) : (
+        <CookingTimer defaultMinutes={timerMinutes} />
+      )}
+
       <div className="space-y-3 pt-2">
         <button onClick={handleSave} disabled={saved}
           className={`w-full font-bold py-3.5 rounded-xl transition-all ${saved ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'btn-gradient text-white'}`}>
@@ -164,10 +294,16 @@ export default function RecipeView({ recipe, onBack, onRetry }: Props) {
             {favorited ? '❤️ 保存済み' : '💾 お気に入り'}
           </button>
         </div>
-        <button onClick={handleAddToShoppingList} disabled={addedToList}
-          className={`w-full py-3 rounded-xl font-medium text-sm active:scale-[0.97] shadow-sm transition-all ${addedToList ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-white dark:bg-dark-card border border-gray-200 dark:border-gray-700'}`}>
-          {addedToList ? '✅ 買い物リストに追加しました' : '🛒 買い物リストに追加'}
-        </button>
+        <div className="flex gap-3">
+          <button onClick={handleAddToShoppingList} disabled={addedToList}
+            className={`flex-1 py-3 rounded-xl font-medium text-sm active:scale-[0.97] shadow-sm transition-all ${addedToList ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-white dark:bg-dark-card border border-gray-200 dark:border-gray-700'}`}>
+            {addedToList ? '✅ リストに追加済み' : '🛒 買い物リスト'}
+          </button>
+          <button onClick={handleShare}
+            className="flex-1 bg-white dark:bg-dark-card border border-gray-200 dark:border-gray-700 py-3 rounded-xl font-medium text-sm active:scale-[0.97] shadow-sm transition-all">
+            {shareMsg || '📤 シェア'}
+          </button>
+        </div>
       </div>
 
       {/* チャットセクション */}

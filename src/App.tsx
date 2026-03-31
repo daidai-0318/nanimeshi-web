@@ -9,7 +9,7 @@ import Settings from './pages/Settings'
 import ManualEntry from './pages/ManualEntry'
 import ShoppingList from './pages/ShoppingList'
 import ApiKeySetup from './components/ApiKeySetup'
-import type { Recipe, AppMode } from './types'
+import type { Recipe, AppMode, ConsultParams } from './types'
 
 type Page = 'home' | 'consult' | 'recipe' | 'history' | 'settings' | 'manual' | 'shopping'
 
@@ -20,6 +20,8 @@ export default function App() {
   const [mode, setMode] = useState<AppMode>('consult')
   const [hasKey, setHasKey] = useState<boolean | null>(null)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [lastParams, setLastParams] = useState<ConsultParams | null>(null)
+  const [retryFlag, setRetryFlag] = useState(0)
 
   useEffect(() => {
     setHasKey(checkApiKey())
@@ -43,12 +45,23 @@ export default function App() {
 
   const handleSelectMode = (m: AppMode) => {
     setMode(m)
+    setLastParams(null)
     setPage('consult')
   }
 
   const handleRecipeReady = (r: Recipe) => {
     setRecipe(r)
     setPage('recipe')
+  }
+
+  const handleRetry = () => {
+    // 前回のパラメータを保持したまま Consult に戻り、即座に再取得
+    setRetryFlag((f) => f + 1)
+    setPage('consult')
+  }
+
+  const handleSaveParams = (params: ConsultParams) => {
+    setLastParams(params)
   }
 
   if (hasKey === null) {
@@ -97,9 +110,9 @@ export default function App() {
 
       <main className="px-4 pb-8 safe-bottom">
         {page === 'home' && <Home onSelectMode={handleSelectMode} onOpenHistory={() => setPage('history')} onOpenManualEntry={() => setPage('manual')} onOpenShoppingList={() => setPage('shopping')} />}
-        {page === 'consult' && <Consult mode={mode} onRecipeReady={handleRecipeReady} onBack={() => setPage('home')} />}
+        {page === 'consult' && <Consult key={retryFlag} mode={mode} retryParams={lastParams} onRecipeReady={handleRecipeReady} onSaveParams={handleSaveParams} onBack={() => setPage('home')} />}
         {page === 'recipe' && recipe && (
-          <RecipeView recipe={recipe} mode={mode} onBack={() => setPage('home')} onRetry={() => setPage('consult')} />
+          <RecipeView recipe={recipe} mode={mode} onBack={() => setPage('home')} onRetry={handleRetry} />
         )}
         {page === 'history' && <History onOpenManualEntry={() => setPage('manual')} />}
         {page === 'settings' && <Settings onApiKeyRemoved={() => setHasKey(false)} />}

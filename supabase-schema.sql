@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS meals (
   ingredients TEXT,
   pfc JSONB,
   is_manual BOOLEAN DEFAULT FALSE,
+  photo_url TEXT,
   cooked_at TIMESTAMPTZ DEFAULT NOW()
 );
 

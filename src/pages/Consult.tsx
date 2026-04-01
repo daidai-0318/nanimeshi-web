@@ -26,7 +26,7 @@ interface ChatMsg { role: 'bot' | 'user'; text: string }
 
 export default function Consult({ mode, retryParams, onRecipeReady, onSaveParams, onBack }: Props) {
   const isRetry = !!retryParams
-  const [step, setStep] = useState(isRetry ? 4 : mode === 'consult' ? 0 : -1)
+  const [step, setStep] = useState(isRetry ? 4 : (mode === 'consult') ? 0 : -1)
   const [ingredients, setIngredients] = useState<string[]>(retryParams?.ingredients ?? [])
   const [ingredientInput, setIngredientInput] = useState('')
   const [mood, setMood] = useState<Mood | null>(retryParams?.mood ?? null)
@@ -71,6 +71,9 @@ export default function Consult({ mode, retryParams, onRecipeReady, onSaveParams
       })
     } else if (mode === 'consult') {
       setMessages([{ role: 'bot', text: '🍳 こんにちは！なにめしシェフです。\n冷蔵庫に何がありますか？' }])
+    } else if (mode === 'suggest') {
+      setMessages([{ role: 'bot', text: '✨ 今日のおすすめを考え中...\n最近の食事と季節を考慮して、ぴったりのレシピを提案するよ！' }])
+      fetchRecipe({ mode: 'suggest' })
     } else if (mode === 'random') {
       setMessages([{ role: 'bot', text: '🎲 おまかせモード！\nランダムにレシピを提案するよ。ちょっと待ってね...' }])
       fetchRecipe({ mode: 'random' })
@@ -120,7 +123,7 @@ export default function Consult({ mode, retryParams, onRecipeReady, onSaveParams
       onSaveParams({ ingredients: params.ingredients ?? [], mood: undefined, cookingTime: undefined, servings: params.servings ?? 1 })
     }
     try {
-      const recent = await getMeals(7)
+      const recent = await getMeals(params.mode === 'suggest' ? 20 : 7)
       const recentNames = recent.map((m) => m.recipe_name)
       const recipe = await requestRecipe(getApiKey(), { ...params, recentMeals: recentNames.length > 0 ? recentNames : undefined })
       onRecipeReady(recipe)

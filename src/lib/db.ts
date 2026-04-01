@@ -8,6 +8,7 @@ export async function addMeal(meal: {
   ingredients: string
   pfc?: PFC | null
   is_manual?: boolean
+  photo_url?: string | null
 }): Promise<{ id: number }> {
   const { data, error } = await supabase
     .from('meals')
@@ -17,12 +18,17 @@ export async function addMeal(meal: {
       ingredients: meal.ingredients,
       pfc: meal.pfc ?? null,
       is_manual: meal.is_manual ?? false,
+      photo_url: meal.photo_url ?? null,
     })
     .select('id')
     .single()
 
   if (error) throw error
   return { id: data.id }
+}
+
+export async function updateMealPhoto(mealId: number, photoUrl: string): Promise<void> {
+  await supabase.from('meals').update({ photo_url: photoUrl }).eq('id', mealId)
 }
 
 export async function updateMealPFC(mealId: number, pfc: PFC): Promise<void> {
@@ -45,6 +51,7 @@ export async function getMeals(limit = 100): Promise<Meal[]> {
     cooked_at: row.cooked_at,
     pfc: row.pfc as PFC | null,
     is_manual: row.is_manual,
+    photo_url: row.photo_url as string | null,
   }))
 }
 

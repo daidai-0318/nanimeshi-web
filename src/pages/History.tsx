@@ -281,7 +281,11 @@ export default function History({ onOpenManualEntry }: { onOpenManualEntry: () =
           <h3 className="font-bold text-sm px-1">{selectedDate} の食事</h3>
           {selectedMeals.length === 0 ? <p className="text-gray-500 text-sm px-1">この日の記録はありません</p> :
             selectedMeals.map((meal) => (
-              <div key={meal.id} className="bg-white dark:bg-dark-card rounded-xl p-3.5 shadow-sm border border-gray-100 dark:border-gray-700">
+              <div key={meal.id} className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                {meal.photo_url && (
+                  <img src={meal.photo_url} alt={meal.recipe_name} className="w-full aspect-[16/9] object-cover" />
+                )}
+                <div className="p-3.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {meal.is_manual && <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300">手動</span>}
@@ -321,6 +325,7 @@ export default function History({ onOpenManualEntry }: { onOpenManualEntry: () =
                     </div>
                   </div>
                 )}
+                </div>
               </div>
             ))}
         </div>

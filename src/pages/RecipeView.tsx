@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { getApiKey } from '../lib/storage'
-import { addMeal, addFavorite, updateMealPFC, addToShoppingList, addToPantry } from '../lib/db'
+import { addMeal, addFavorite, updateMealPFC, updateMealPhoto, addToShoppingList, addToPantry } from '../lib/db'
+import PhotoCapture from '../components/PhotoCapture'
 import { chatAboutRecipe, estimatePFC } from '../lib/claude'
 import type { Recipe, AppMode } from '../types'
 
@@ -123,6 +124,9 @@ export default function RecipeView({ recipe, onBack, onRetry }: Props) {
   const [chatLoading, setChatLoading] = useState(false)
   const [chatError, setChatError] = useState('')
   const [showTimer, setShowTimer] = useState(false)
+  const [showPhotoCapture, setShowPhotoCapture] = useState(false)
+  const [savedMealId, setSavedMealId] = useState<number | null>(null)
+  const [photoSaved, setPhotoSaved] = useState(false)
   const chatBottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -137,6 +141,8 @@ export default function RecipeView({ recipe, onBack, onRetry }: Props) {
     const ingredientsStr = JSON.stringify(recipe.ingredients)
     const { id } = await addMeal({ recipe_name: recipe.name, category: recipe.category, ingredients: ingredientsStr })
     setSaved(true)
+    setSavedMealId(id)
+    setShowPhotoCapture(true)
 
     // パントリーに食材を追加
     for (const ing of recipe.ingredients) {
@@ -155,6 +161,18 @@ export default function RecipeView({ recipe, onBack, onRetry }: Props) {
     } catch {
       // PFC推定失敗しても食事は記録済み
     }
+  }
+
+  const handlePhotoCapture = async (dataUrl: string) => {
+    if (savedMealId) {
+      await updateMealPhoto(savedMealId, dataUrl).catch(() => {})
+    }
+    setPhotoSaved(true)
+    setShowPhotoCapture(false)
+  }
+
+  const handlePhotoSkip = () => {
+    setShowPhotoCapture(false)
   }
 
   const handleFav = async () => {
@@ -285,10 +303,15 @@ export default function RecipeView({ recipe, onBack, onRetry }: Props) {
         <CookingTimer defaultMinutes={timerMinutes} />
       )}
 
+      {/* 写真撮影モーダル */}
+      {showPhotoCapture && (
+        <PhotoCapture onCapture={handlePhotoCapture} onSkip={handlePhotoSkip} />
+      )}
+
       <div className="space-y-3 pt-2">
         <button onClick={handleSave} disabled={saved}
           className={`w-full font-bold py-3.5 rounded-xl transition-all ${saved ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'btn-gradient text-white'}`}>
-          {saved ? '✅ 記録しました！' : '📝 食べた！'}
+          {saved ? (photoSaved ? '📸 写真付きで記録しました！' : '✅ 記録しました！') : '📝 食べた！'}
         </button>
         <div className="flex gap-3">
           <button onClick={onRetry} className="flex-1 bg-white dark:bg-dark-card border border-gray-200 dark:border-gray-700 py-3 rounded-xl font-medium text-sm active:scale-[0.97] shadow-sm">🔄 別のレシピ</button>

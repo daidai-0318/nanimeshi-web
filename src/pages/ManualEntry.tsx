@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { getApiKey } from '../lib/storage'
 import { addMeal } from '../lib/db'
 import { estimatePFC } from '../lib/claude'
@@ -29,6 +29,31 @@ export default function ManualEntry({ onBack, onSaved }: Props) {
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
   const [estimatedPFC, setEstimatedPFC] = useState<PFC | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !file.type.startsWith('image/')) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        const maxSize = 800
+        let w = img.width, h = img.height
+        if (w > maxSize || h > maxSize) {
+          if (w > h) { h = Math.round((h * maxSize) / w); w = maxSize }
+          else { w = Math.round((w * maxSize) / h); h = maxSize }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        setPhotoPreview(canvas.toDataURL('image/jpeg', 0.7))
+      }
+      img.src = reader.result as string
+    }
+    reader.readAsDataURL(file)
+  }
 
   const addIngredient = () => {
     const t = ingredientInput.trim()
@@ -70,6 +95,7 @@ export default function ManualEntry({ onBack, onSaved }: Props) {
         ingredients: JSON.stringify(ingredients.map((name) => ({ name, amount: '' }))),
         pfc,
         is_manual: true,
+        photo_url: photoPreview,
       })
 
       setSaved(true)
@@ -147,7 +173,7 @@ export default function ManualEntry({ onBack, onSaved }: Props) {
         )}
 
         <div className="space-y-3">
-          <button onClick={() => { setSaved(false); setRecipeName(''); setCategory(null); setIngredients([]); setSeasoning(''); setEstimatedPFC(null) }}
+          <button onClick={() => { setSaved(false); setRecipeName(''); setCategory(null); setIngredients([]); setSeasoning(''); setEstimatedPFC(null); setPhotoPreview(null) }}
             className="w-full bg-white dark:bg-dark-card border border-gray-200 dark:border-gray-700 py-3 rounded-xl font-medium text-sm active:scale-[0.97] shadow-sm">
             ✏️ もう1品記録する
           </button>
@@ -233,6 +259,24 @@ export default function ManualEntry({ onBack, onSaved }: Props) {
           rows={2}
           className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-transparent focus:border-accent focus:outline-none text-sm transition-colors resize-none"
         />
+      </div>
+
+      <div className="bg-white dark:bg-dark-card rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+        <h3 className="font-bold text-sm mb-3">📸 写真 <span className="text-gray-400 font-normal">(任意)</span></h3>
+        {photoPreview ? (
+          <div className="relative rounded-xl overflow-hidden">
+            <img src={photoPreview} alt="料理の写真" className="w-full aspect-[4/3] object-cover" />
+            <button onClick={() => { setPhotoPreview(null); if (fileRef.current) fileRef.current.value = '' }}
+              className="absolute top-2 right-2 w-8 h-8 bg-black/50 text-white rounded-full flex items-center justify-center text-sm backdrop-blur-sm">✕</button>
+          </div>
+        ) : (
+          <button onClick={() => fileRef.current?.click()}
+            className="w-full py-8 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-accent/50 text-gray-400 transition-all active:scale-[0.97] flex flex-col items-center gap-1">
+            <span className="text-2xl">📷</span>
+            <span className="text-xs">タップして撮影・選択</span>
+          </button>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="hidden" />
       </div>
 
       {error && (

@@ -80,6 +80,8 @@ function buildUserMessage(params: {
     parts.push('手抜きモードでお願いします。包丁なし・5分以内の超簡単レシピをお願いします。')
   } else if (params.mode === 'random') {
     parts.push('おまかせでレシピを1つ提案してください。')
+  } else if (params.mode === 'suggest') {
+    parts.push('今日のおすすめレシピを1つ提案してください。季節の旬の食材を活かし、時間帯に合った料理にしてください。最近の食事と栄養バランスを考慮して、バリエーション豊かな提案をお願いします。')
   }
 
   if (params.ingredients && params.ingredients.length > 0) {

@@ -25,6 +25,15 @@ function getSeasonEmoji(): string {
   return '⛄'
 }
 
+function getSuggestMessage(): string {
+  const hour = new Date().getHours()
+  if (hour >= 5 && hour < 10) return '朝にぴったりの一品を提案！'
+  if (hour >= 10 && hour < 15) return 'ランチにぴったりの一品を提案！'
+  if (hour >= 15 && hour < 17) return '小腹が空いた？おやつを提案！'
+  if (hour >= 17 && hour < 21) return '今夜の晩ごはんを提案！'
+  return '夜食にぴったりの一品を提案！'
+}
+
 export default function Home({ onSelectMode, onOpenHistory, onOpenManualEntry, onOpenShoppingList }: { onSelectMode: (m: AppMode) => void; onOpenHistory: () => void; onOpenManualEntry: () => void; onOpenShoppingList: () => void }) {
   const [totalMeals, setTotalMeals] = useState(0)
 
@@ -42,6 +51,23 @@ export default function Home({ onSelectMode, onOpenHistory, onOpenManualEntry, o
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">これまで {totalMeals} 食を記録</p>
         )}
       </div>
+      {/* ワンタップ提案ボタン */}
+      <button
+        onClick={() => onSelectMode('suggest')}
+        className="w-full mb-6 relative overflow-hidden bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500 text-white rounded-2xl p-6 shadow-lg shadow-purple-200/50 dark:shadow-purple-900/30 hover:shadow-xl transition-all active:scale-[0.97] animate-scale-in"
+      >
+        <div className="relative z-10 flex items-center gap-4">
+          <div className="text-4xl w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0 backdrop-blur-sm">
+            ✨
+          </div>
+          <div className="flex-1 text-left">
+            <h2 className="font-bold text-lg">今日のおすすめ</h2>
+            <p className="text-white/80 text-sm mt-0.5">{getSuggestMessage()}</p>
+          </div>
+          <span className="text-white/60 text-lg">›</span>
+        </div>
+      </button>
+
       <div className="space-y-4 mb-8">
         {modes.map((m, i) => (
           <button key={m.id} onClick={() => onSelectMode(m.id)}

@@ -32,6 +32,7 @@ export interface Meal {
   cooked_at: string
   pfc?: PFC | null
   is_manual?: boolean
+  photo_url?: string | null
 }
 
 export interface Favorite {
@@ -63,6 +64,6 @@ export interface ConsultParams {
   servings: number
 }
 
-export type AppMode = 'consult' | 'random' | 'lazy'
+export type AppMode = 'consult' | 'random' | 'lazy' | 'suggest'
 export type Mood = 'がっつり' | 'あっさり' | '辛いもの' | '甘いもの' | 'ヘルシー'
 export type CookingTime = '5分以内' | '15分' | '30分' | '時間気にしない'
